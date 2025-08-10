@@ -1,52 +1,223 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LLM Chat App with Auth</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <!-- Login / Signup Container -->
-    <div id="auth-container">
-      <h1>Welcome to AI Teacher</h1>
-      <div>
-        <input type="text" id="auth-username" placeholder="Username" />
-        <input type="password" id="auth-password" placeholder="Password" />
-      </div>
-      <div>
-        <button id="login-button">Login</button>
-        <button id="signup-button">Sign Up</button>
-      </div>
-      <p id="auth-message" style="color:red;"></p>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LLM Chat App</title>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #4f46e5, #9333ea);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    /* Auth box */
+    #auth-container {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 2rem;
+      width: 320px;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+      text-align: center;
+      color: white;
+      animation: fadeIn 0.6s ease-in-out;
+    }
+    #auth-container h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+      font-weight: bold;
+    }
+    #auth-container input {
+      width: 100%;
+      padding: 0.8rem;
+      margin: 0.4rem 0;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      outline: none;
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+    }
+    #auth-container input::placeholder {
+      color: rgba(255, 255, 255, 0.6);
+    }
+    #auth-container button {
+      width: 48%;
+      padding: 0.7rem;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.15s ease, background-color 0.2s ease;
+    }
+    #login-button {
+      background: #22c55e;
+      color: white;
+    }
+    #signup-button {
+      background: #3b82f6;
+      color: white;
+    }
+    #auth-container button:hover {
+      transform: scale(1.05);
+      filter: brightness(1.1);
+    }
+    #auth-message {
+      margin-top: 0.8rem;
+      font-size: 0.9rem;
+    }
+
+    /* Chat UI */
+    #chat-container {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      max-width: 600px;
+      height: 80vh;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+    header {
+      padding: 1rem;
+      background: rgba(0, 0, 0, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+    }
+    #logout-button {
+      background: #ef4444;
+      padding: 0.5rem 1rem;
+      border-radius: 10px;
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+    .chat-messages {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      color: white;
+      display: flex;
+      flex-direction: column;
+    }
+    .message {
+      margin: 0.5rem 0;
+      padding: 0.8rem;
+      border-radius: 12px;
+      max-width: 80%;
+    }
+    .user-message {
+      background: #2563eb;
+      align-self: flex-end;
+    }
+    .assistant-message {
+      background: #6d28d9;
+      align-self: flex-start;
+    }
+    .message-input {
+      display: flex;
+      padding: 0.8rem;
+      background: rgba(0, 0, 0, 0.15);
+    }
+    .message-input textarea {
+      flex: 1;
+      resize: none;
+      border-radius: 10px;
+      padding: 0.8rem;
+      border: none;
+      outline: none;
+    }
+    .message-input button {
+      background: #22c55e;
+      border: none;
+      border-radius: 10px;
+      color: white;
+      padding: 0.8rem 1.2rem;
+      margin-left: 0.5rem;
+      cursor: pointer;
+    }
+    .typing-indicator {
+      padding: 0.5rem;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.6);
+      display: none;
+    }
+    .typing-indicator.visible {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Auth Screen -->
+  <div id="auth-container">
+    <h1>Welcome</h1>
+    <input type="text" id="username" placeholder="Username" />
+    <input type="password" id="password" placeholder="Password" />
+    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+      <button id="login-button">Login</button>
+      <button id="signup-button">Sign Up</button>
     </div>
+    <div id="auth-message"></div>
+  </div>
 
-    <!-- Chat Container -->
-    <div id="chat-container" style="display:none;">
-      <header>
-        <h1>Cloudflare AI Chat</h1>
-        <button id="logout-button" style="float:right;">Logout</button>
-      </header>
-
-      <div class="chat-container">
-        <div id="chat-messages" class="chat-messages"></div>
-
-        <div class="typing-indicator" id="typing-indicator">
-          teacher is thinking...
-        </div>
-
-        <div class="message-input">
-          <textarea
-            id="user-input"
-            placeholder="your time to learn"
-            rows="1"
-            autofocus
-          ></textarea>
-          <button id="send-button">Send</button>
-        </div>
-      </div>
+  <!-- Chat Screen -->
+  <div id="chat-container">
+    <header>
+      <span>LLM Chat</span>
+      <button id="logout-button">Logout</button>
+    </header>
+    <div id="chat-messages" class="chat-messages"></div>
+    <div id="typing-indicator" class="typing-indicator">Assistant is typing...</div>
+    <div class="message-input">
+      <textarea id="user-input" rows="1" placeholder="Type your message..."></textarea>
+      <button id="send-button">Send</button>
     </div>
+  </div>
 
-    <script src="chat.js"></script>
-  </body>
+  <script src="chat.js"></script>
+  <script>
+    // Simple auth logic (placeholder)
+    const authContainer = document.getElementById('auth-container');
+    const chatContainer = document.getElementById('chat-container');
+    const loginBtn = document.getElementById('login-button');
+    const signupBtn = document.getElementById('signup-button');
+    const logoutBtn = document.getElementById('logout-button');
+    const authMsg = document.getElementById('auth-message');
+
+    loginBtn.addEventListener('click', () => {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value.trim();
+      if (username && password) {
+        authContainer.style.display = 'none';
+        chatContainer.style.display = 'flex';
+      } else {
+        authMsg.textContent = 'Please enter username & password.';
+      }
+    });
+
+    signupBtn.addEventListener('click', () => {
+      authMsg.textContent = 'Signup functionality coming soon!';
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      chatContainer.style.display = 'none';
+      authContainer.style.display = 'block';
+    });
+  </script>
+</body>
 </html>
