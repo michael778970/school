@@ -1,99 +1,99 @@
 /**
- * LLM Chat Application Template
- *
- * A simple chat application using Cloudflare Workers AI.
- * This template demonstrates how to implement an LLM-powered chat interface with
- * streaming responses using Server-Sent Events (SSE).
- *
- * @license MIT
+ * Minimal Cloudflare Workers AI Chat App (No Auth)
+ * Streams responses using SSE
  */
-import { Env, ChatMessage } from "./types";
 
-// Model ID for Workers AI model
-// https://developers.cloudflare.com/workers-ai/models/
-const MODEL_ID = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-
-// Default system prompt
-const SYSTEM_PROMPT =
-  "you are a teacher that has 20 years of teaching you do not tell the answer you tell how to makee the answer and you provide good responses.";
+export interface Env {
+  AI: Ai; // Cloudflare Workers AI binding
+}
 
 export default {
-  /**
-   * Main request handler for the Worker
-   */
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext,
-  ): Promise<Response> {
-    const url = new URL(request.url);
+  async fetch(req: Request, env: Env) {
+    const url = new URL(req.url);
 
-    // Handle static assets (frontend)
-    if (url.pathname === "/" || !url.pathname.startsWith("/api/")) {
-      return env.ASSETS.fetch(request);
+    if (url.pathname === "/api/chat" && req.method === "POST") {
+      const body = await req.json<{ messages: { role: string; content: string }[] }>();
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          const aiStream = await env.AI.stream("@cf/meta/llama-3.3-8b-instruct", {
+            messages: body.messages,
+          });
+
+          const encoder = new TextEncoder();
+
+          for await (const chunk of aiStream) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+          }
+
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
     }
 
-    // API Routes
-    if (url.pathname === "/api/chat") {
-      // Handle POST requests for chat
-      if (request.method === "POST") {
-        return handleChatRequest(request, env);
+    if (url.pathname === "/") {
+      return new Response(
+        `<!DOCTYPE html>
+<html>
+<head>
+<title>Chat</title>
+<style>
+body { font-family: sans-serif; padding: 20px; }
+#chat { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<div id="chat"></div>
+<input id="msg" placeholder="Type message..." />
+<button onclick="send()">Send</button>
+<script>
+let chat = document.getElementById('chat');
+async function send() {
+  let msg = document.getElementById('msg').value;
+  chat.innerHTML += '<div><b>You:</b> ' + msg + '</div>';
+  document.getElementById('msg').value = '';
+
+  let res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: [{ role: 'user', content: msg }] })
+  });
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\\n\\n');
+    buffer = parts.pop();
+    for (let part of parts) {
+      if (part.startsWith('data: ')) {
+        let data = JSON.parse(part.slice(6));
+        if (data.response) {
+          chat.innerHTML += '<div><b>AI:</b> ' + data.response + '</div>';
+        }
       }
-
-      // Method not allowed for other request types
-      return new Response("Method not allowed", { status: 405 });
     }
-
-    // Handle 404 for unmatched routes
-    return new Response("Not found", { status: 404 });
-  },
-} satisfies ExportedHandler<Env>;
-
-/**
- * Handles chat API requests
- */
-async function handleChatRequest(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  try {
-    // Parse JSON request body
-    const { messages = [] } = (await request.json()) as {
-      messages: ChatMessage[];
-    };
-
-    // Add system prompt if not present
-    if (!messages.some((msg) => msg.role === "system")) {
-      messages.unshift({ role: "system", content: SYSTEM_PROMPT });
-    }
-
-    const response = await env.AI.run(
-      MODEL_ID,
-      {
-        messages,
-        max_tokens: 1024,
-      },
-      {
-        returnRawResponse: true,
-        // Uncomment to use AI Gateway
-        // gateway: {
-        //   id: "YOUR_GATEWAY_ID", // Replace with your AI Gateway ID
-        //   skipCache: false,      // Set to true to bypass cache
-        //   cacheTtl: 3600,        // Cache time-to-live in seconds
-        // },
-      },
-    );
-
-    // Return streaming response
-    return response;
-  } catch (error) {
-    console.error("Error processing chat request:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to process request" }),
-      {
-        status: 500,
-        headers: { "content-type": "application/json" },
-      },
-    );
   }
-} 
+}
+</script>
+</body>
+</html>`,
+        { headers: { "Content-Type": "text/html" } }
+      );
+    }
+
+    return new Response("Not Found", { status: 404 });
+  },
+};
